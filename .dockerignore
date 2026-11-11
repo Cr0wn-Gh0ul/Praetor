@@ -1,0 +1,9 @@
+.git
+.next
+.data
+node_modules
+npm-debug.log*
+.env*
+coverage
+.github/prompts
+cursor_specification_document.md
