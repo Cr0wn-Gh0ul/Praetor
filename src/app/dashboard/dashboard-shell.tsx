@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, CircleAlert, ExternalLink, GitMerge, GitPullRequest, LoaderCircle, Settings2, Shield, Wrench, Eye, ClipboardList, Code2, RefreshCw, X, FolderTree, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Check, CircleAlert, ExternalLink, GitPullRequest, LoaderCircle, Settings2, Shield, Wrench, RefreshCw, X, FolderTree, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { ContextStatus } from "@/components/context/ContextStatus";
 import { DraftWorkspace } from "@/components/drafts/DraftWorkspace";
 import { RepositorySelector } from "@/components/repository/RepositorySelector";
@@ -14,7 +14,7 @@ import { PullRequestControls } from "@/components/issue/PullRequestControls";
 import { PullRequestReviews } from "@/components/issue/PullRequestReviews";
 import { PlanActions } from "@/components/issue/PlanActions";
 import { Markdown } from "@/components/markdown/Markdown";
-import { ActionsWorkspace, IssuesWorkspace, PullRequestsWorkspace } from "./workspace-views";
+import { ActionsWorkspace, HomeWorkspace, IssuesWorkspace, PullRequestsWorkspace, STAGE_ICONS } from "./workspace-views";
 import { useIssue } from "@/hooks/useIssue";
 import { useContextSync } from "@/hooks/useIndex";
 import { useIssues } from "@/hooks/useIssues";
@@ -48,10 +48,12 @@ const nextStepHints: Partial<Record<AgentState, string>> = {
   done: "The pull request has been merged.",
 };
 
+type DashboardView = "home" | "issues" | "pulls" | "actions";
+
 type DashboardShellProps = {
   initialIssue: number | null;
   initialDraft: string | null;
-  initialView: "issues" | "pulls" | "actions";
+  initialView: DashboardView;
   initialStage: IssueStageFilter;
   initialRepo: string;
   defaultModels: AppConfig["models"];
@@ -70,7 +72,7 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
   const setupReady = setup?.summary === "ready";
   const [selectedIssue, setSelectedIssue] = useState(hasRepo ? initialIssue : null);
   const [selectedDraft, setSelectedDraft] = useState(initialDraft);
-  const [activeView, setActiveView] = useState<"issues" | "pulls" | "actions">(initialView);
+  const [activeView, setActiveView] = useState<DashboardView>(initialView);
   const [stageFilter, setStageFilter] = useState<IssueStageFilter>(initialStage);
   const [selectedCode, setSelectedCode] = useState("");
   const [diffRefreshKey, setDiffRefreshKey] = useState(0);
@@ -83,6 +85,10 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
   const { data: issue, error: issueError, isLoading: issueLoading, mutate: refreshIssue } = useIssue(hasRepo ? selectedIssue : null);
 
   useEffect(() => {
+    if (activeView === "home") {
+      router.replace("/dashboard", { scroll: false });
+      return;
+    }
     const params = new URLSearchParams({ view: activeView });
     if (activeView === "issues" && selectedDraft) params.set("draft", selectedDraft);
     if (activeView === "issues" && selectedIssue) params.set("issue", String(selectedIssue));
@@ -108,6 +114,12 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
     setActiveView("issues");
     setSelectedDraft(null);
     setSelectedIssue(issueNumber);
+  }
+
+  function selectHome() {
+    setActiveView("home");
+    setSelectedIssue(null);
+    setSelectedDraft(null);
   }
 
   function selectView(view: "issues" | "pulls" | "actions") {
@@ -177,7 +189,7 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[var(--base)]/85 px-3 backdrop-blur md:px-4">
-        <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5 text-sm font-semibold tracking-wide">
+        <Link href="/dashboard" onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); selectHome(); }} className="flex shrink-0 items-center gap-2.5 text-sm font-semibold tracking-wide">
           <span className="grid size-8 place-items-center rounded-lg border border-[var(--accent)]/50 text-[var(--accent)]"><Shield size={16} strokeWidth={2.25} aria-hidden="true" /></span>
           <span className="hidden sm:inline">Praetor</span>
         </Link>
@@ -207,7 +219,7 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
           <div className="px-2 py-3">
             <nav aria-label="Issue pipeline stages" className="space-y-0.5">
               {ISSUE_PIPELINE_STAGES.map(({ id, label }) => {
-                const StageIcon = id === "issue" ? CircleAlert : id === "plan" ? ClipboardList : id === "build" ? Code2 : id === "review" ? Eye : id === "pull-request" ? GitPullRequest : id === "needs-attention" ? Shield : GitMerge;
+                const StageIcon = STAGE_ICONS[id];
                 const count = issues?.filter((item) => issueMatchesStage(item.labels, id)).length;
                 return <SidebarItem key={id} active={activeView === "issues" && stageFilter === id} onClick={() => selectStage(id)}><span className="flex items-center gap-2"><StageIcon size={14} />{label}<span className="ml-auto text-[11px] tabular-nums text-[var(--muted)]">{count ?? "–"}</span></span></SidebarItem>;
               })}
@@ -231,6 +243,8 @@ export function DashboardShell({ initialIssue, initialDraft, initialView, initia
 
           {!hasRepo ? (
             <ChooseRepository />
+          ) : activeView === "home" ? (
+            <HomeWorkspace repository={initialRepo} issues={issues} error={issuesError} loading={issuesLoading} creatingIssue={creatingDraft} onNewIssue={() => void createNewDraft()} onSelectStage={selectStage} onSelectIssue={selectIssue} onSelectView={selectView} />
           ) : activeView === "pulls" ? (
             <PullRequestsWorkspace />
           ) : activeView === "actions" ? (

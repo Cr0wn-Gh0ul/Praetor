@@ -9,6 +9,8 @@ Assistant agents help you steer every step. You approve, redirect, and merge.
 
 [Features](#features) · [How it flows](#how-it-flows) · [Get started](#get-started) · [Context](#context)
 
+<img src="screenshots/home.png" alt="Praetor home: pipeline stage counts, issues needing attention, and recent activity" width="900">
+
 </div>
 
 ## Features

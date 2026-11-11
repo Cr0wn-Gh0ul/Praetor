@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { CircleAlert, GitPullRequest, LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { ArrowRight, CircleAlert, ClipboardList, Code2, Eye, GitMerge, GitPullRequest, LoaderCircle, Plus, RefreshCw, Shield, Wrench } from "lucide-react";
 import type { AgentState, IssueSummary } from "@/lib/types";
 import { AGENT_LABELS } from "@/lib/constants";
 import { formatRelativeTime } from "@/lib/format";
-import { hasAgentStateLabel, ISSUE_PIPELINE_STAGES, ISSUE_STATE_TITLES, issueMatchesStage, type IssueStageFilter } from "@/lib/issue-stage";
+import { hasAgentStateLabel, ISSUE_PIPELINE_STAGES, ISSUE_STATE_TITLES, issueMatchesStage, type IssuePipelineStage, type IssueStageFilter } from "@/lib/issue-stage";
 import { stateFromLabels } from "@/lib/state";
 
 export { ISSUE_PIPELINE_STAGES, issueMatchesStage } from "@/lib/issue-stage";
@@ -47,6 +47,82 @@ export function IssuesWorkspace({ issues, error, loading, isValidating, onRefres
       {!visible.length && <p className="px-2 py-8 text-sm text-[var(--muted)]">No issues match these filters.</p>}
     </div>}
   </section>;
+}
+
+export const STAGE_ICONS: Record<IssuePipelineStage, typeof CircleAlert> = {
+  issue: CircleAlert,
+  plan: ClipboardList,
+  build: Code2,
+  review: Eye,
+  "pull-request": GitPullRequest,
+  "needs-attention": Shield,
+  done: GitMerge,
+};
+
+const STAGE_HINTS: Record<IssuePipelineStage, string> = {
+  issue: "Not started",
+  plan: "Plans to write or approve",
+  build: "Approved or building",
+  review: "Changes to review",
+  "pull-request": "Open pull requests",
+  "needs-attention": "Paused for you",
+  done: "Merged",
+};
+
+export function HomeWorkspace({ repository, issues, error, loading, onSelectStage, onSelectIssue, onSelectView, onNewIssue, creatingIssue }: { repository: string; issues?: IssueSummary[]; error?: Error; loading: boolean; onSelectStage: (stage: IssueStageFilter) => void; onSelectIssue: (issueNumber: number) => void; onSelectView: (view: "pulls" | "actions") => void; onNewIssue: () => void; creatingIssue: boolean }) {
+  const open = (issues ?? []).filter((issue) => issue.state === "open" || stateFromLabels(issue.labels) === "done");
+  const needsAttention = open.filter((issue) => issueMatchesStage(issue.labels, "needs-attention")).slice(0, 5);
+  const recent = [...open].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 6);
+  const [owner, name] = repository.split("/");
+
+  return <section className="mx-auto w-full max-w-6xl group-data-[wide=true]/main:max-w-none px-5 py-7 md:px-8">
+    <header className="flex items-center gap-3 border-b border-[var(--line)] pb-5">
+      <div className="min-w-0">
+        <p className="label-caps">Workspace</p>
+        <h1 className="mt-1 truncate text-2xl font-semibold"><span className="font-normal text-[var(--muted)]">{owner}/</span>{name}</h1>
+      </div>
+      <button type="button" onClick={onNewIssue} disabled={creatingIssue} className="btn btn-primary btn-sm ml-auto">{creatingIssue ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}New issue</button>
+    </header>
+    {error ? <ErrorMessage message={error.message} /> : <>
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        {ISSUE_PIPELINE_STAGES.map(({ id, label }) => {
+          const Icon = STAGE_ICONS[id];
+          const count = issues?.filter((issue) => issueMatchesStage(issue.labels, id)).length;
+          return <button key={id} type="button" onClick={() => onSelectStage(id)} className={`card group p-4 text-left transition-colors hover:border-[var(--accent)]/50 ${id === "needs-attention" && count ? "border-[var(--warning)]/40" : ""}`}>
+            <span className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]"><Icon size={14} />{label}</span>
+            <span className="mt-3 block text-3xl font-semibold tabular-nums">{count ?? "–"}</span>
+            <span className="mt-1 block truncate text-[11px] text-[var(--muted)]">{STAGE_HINTS[id]}</span>
+          </button>;
+        })}
+      </div>
+
+      {loading && !issues ? <p role="status" className="mt-8 flex items-center gap-2 text-sm text-[var(--muted)]"><LoaderCircle size={14} className="animate-spin" />Loading issues…</p> : !open.length ? <div className="mt-8 border-y border-[var(--line)] px-2 py-10 text-center">
+        <p className="text-base font-semibold">No issues yet</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-[var(--muted)]">Draft your first issue, then let an agent plan it. You approve every step.</p>
+      </div> : <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        <HomeList title="Needs attention" empty="Nothing is waiting on you." issues={needsAttention} onSelectIssue={onSelectIssue} action={needsAttention.length ? { label: "View all", onClick: () => onSelectStage("needs-attention") } : undefined} />
+        <HomeList title="Recently updated" empty="No recent activity." issues={recent} onSelectIssue={onSelectIssue} />
+      </div>}
+
+      <div className="mt-8 flex flex-wrap gap-2 border-t border-[var(--line)] pt-5">
+        <button type="button" onClick={() => onSelectView("pulls")} className="btn btn-secondary btn-sm"><GitPullRequest size={14} />Pull requests<ArrowRight size={12} /></button>
+        <button type="button" onClick={() => onSelectView("actions")} className="btn btn-secondary btn-sm"><Wrench size={14} />Actions<ArrowRight size={12} /></button>
+      </div>
+    </>}
+  </section>;
+}
+
+function HomeList({ title, issues, empty, onSelectIssue, action }: { title: string; issues: IssueSummary[]; empty: string; onSelectIssue: (issueNumber: number) => void; action?: { label: string; onClick: () => void } }) {
+  return <div>
+    <div className="mb-2 flex h-7 items-center"><h2 className="label-caps">{title}</h2>{action && <button type="button" onClick={action.onClick} className="btn btn-ghost btn-sm -mr-2 ml-auto text-[var(--accent)]">{action.label}</button>}</div>
+    <div className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
+      {issues.map((issue) => <button key={issue.number} type="button" onClick={() => onSelectIssue(issue.number)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 py-3 text-left hover:bg-[var(--panel-2)]">
+        <span className="min-w-0"><span className="block truncate text-sm font-medium">{issue.title}</span><span className="mt-1 block text-[11px] text-[var(--muted)]">#{issue.number} · Updated {formatRelativeTime(issue.updatedAt)}</span></span>
+        <State state={stateFromLabels(issue.labels)} labels={issue.labels} />
+      </button>)}
+      {!issues.length && <p className="px-2 py-6 text-sm text-[var(--muted)]">{empty}</p>}
+    </div>
+  </div>;
 }
 
 export function PullRequestsWorkspace() {

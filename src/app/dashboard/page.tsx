@@ -13,7 +13,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return <DashboardShell
     initialIssue={Number.isSafeInteger(parsedIssue) && parsedIssue > 0 ? parsedIssue : null}
     initialDraft={draft ?? null}
-    initialView={view === "pulls" || view === "actions" ? view : "issues"}
+    initialView={view === "pulls" || view === "actions" ? view : view === "issues" || issue || draft || stage ? "issues" : "home"}
     initialStage={parseIssueStageFilter(stage)}
     initialRepo={config.targetRepo}
     defaultModels={config.models}
