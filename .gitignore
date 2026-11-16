@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# large local media and Windows download markers
+docs/*.mp4
+*:Zone.Identifier
